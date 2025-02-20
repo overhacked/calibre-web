@@ -521,18 +521,30 @@ def update_dir_structure_gdrive(book_id, first_author):
     return False
 
 
+def move_gracefully_degrade(src, dst):
+    for copy_function, without in (
+        (shutil.copy2, "metadata",),
+        (shutil.copy, "permissions",),
+        (shutil.copyfile, None,)
+    ):
+        try:
+            shutil.move(src, dst, copy_function=copy_function)
+            break
+        except OSError:
+            if without:
+                log.error("Move from {} to {} failed with error, trying to "
+                        "move without {}".format(src, dst, without))
+            else:
+                raise
+
+
 def move_files_on_change(calibre_path, new_author_dir, new_titledir, localbook, db_filename, original_filepath, path):
     new_path = os.path.join(calibre_path, new_author_dir, new_titledir)
     try:
         if original_filepath:
             if not os.path.isdir(new_path):
                 os.makedirs(new_path)
-            try:
-                shutil.move(original_filepath, os.path.join(new_path, db_filename))
-            except OSError:
-                log.error("Rename title from {} to {} failed with error, trying to "
-                          "move without metadata".format(path, new_path))
-                shutil.move(original_filepath, os.path.join(new_path, db_filename), copy_function=shutil.copy)
+            move_gracefully_degrade(original_filepath, os.path.join(new_path, db_filename), copy_function=copy_function)
             log.debug("Moving title: %s to %s", original_filepath, new_path)
         else:
             # Check new path is not valid path
